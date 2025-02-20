@@ -133,5 +133,4 @@
  C:/Users/ariza/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/esp_hw_support/include/soc/esp32/spiram.h \
  C:/Users/ariza/.platformio/packages/framework-arduinoespressif32/cores/esp32/io_pin_remap.h \
  C:/Users/ariza/.platformio/packages/framework-arduinoespressif32/cores/esp32/Arduino.h \
- .pio/libdeps/esp32doit-devkit-v1/HX711_ADC/src/HX711_ADC.h \
- .pio/libdeps/esp32doit-devkit-v1/HX711_ADC/src/config.h
+ src/balanza.h
