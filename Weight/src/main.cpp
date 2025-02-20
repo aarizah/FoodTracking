@@ -12,8 +12,12 @@ const int HX711_sck = 5; // mcu > HX711 sck pin
 HX711_ADC LoadCell(HX711_dout, HX711_sck);
 
 unsigned long t = 0;
-float lastWeight = 0.0; // Última lectura del peso
-const float WEIGHT_THRESHOLD = 2.0; // Umbral en gramos
+float lastWeight = 0.0;  // Última lectura registrada
+const float WEIGHT_THRESHOLD = 2.0; // Umbral para detectar cambio de peso
+const int STABLE_COUNT_REQUIRED = 5; // Número de lecturas estables antes de imprimir
+
+int stableCount = 0;  // Contador de estabilidad
+bool weightPrinted = false; // Para evitar imprimir valores intermedios
 
 void setup() {
   Serial.begin(57600);
@@ -23,50 +27,58 @@ void setup() {
 
   LoadCell.begin();
   
-  // ⚡ Acelerar la estabilización
-  unsigned long stabilizingtime = 500;  // Reducido de 2000 ms a 500 ms
+  // ⚡ tiempo de estabilización inicial
+  unsigned long stabilizingtime = 1000;  
   boolean _tare = true;
   LoadCell.start(stabilizingtime, _tare);
 
   if (LoadCell.getTareTimeoutFlag() || LoadCell.getSignalTimeoutFlag()) {
-    Serial.println("Timeout, check MCU>HX711 wiring and pin designations");
+    Serial.println("Timeout, revisa las conexiones con el HX711");
     while (1);
   } else {
-    LoadCell.setCalFactor(496.33); // Factor de calibración
-    Serial.println("Startup is complete");
+    LoadCell.setCalFactor(496.33); 
+    Serial.println("Startup completo");
   }
 
-  // ⚡ Reducir el número de muestras para mejorar la velocidad de lectura
-  LoadCell.setSamplesInUse(4);  // Valor menor = lectura más rápida (por defecto suele ser 16)
+  // ⚡ Reducimos el número de muestras para lectura más rápida
+  LoadCell.setSamplesInUse(4);
 }
 
 void loop() {
   static boolean newDataReady = false;
 
-  // ⚡ Asegurar que el sensor procesa datos lo más rápido posible
   if (LoadCell.update()) newDataReady = true;
 
   if (newDataReady) {
-    float weight = LoadCell.getData(); // Obtiene el nuevo peso
-    
-    // Si la diferencia es mayor al umbral, imprime el valor
+    float weight = LoadCell.getData(); // Obtiene la lectura actual
+
+    // Si el peso ha cambiado significativamente, reiniciar contador
     if (abs(weight - lastWeight) > WEIGHT_THRESHOLD) {
-      Serial.print("Peso actual: ");
-      Serial.println(weight);
-      lastWeight = weight; // Actualiza el último peso registrado
+      stableCount = 0;  // Reiniciar estabilidad porque el peso está cambiando
+      weightPrinted = false; // Aún no imprimir
+    } else {
+      stableCount++; // Aumenta estabilidad si el peso no varía mucho
     }
 
+    // Solo imprimimos cuando el peso se ha mantenido estable varias veces seguidas
+    if (stableCount >= STABLE_COUNT_REQUIRED && !weightPrinted) {
+      Serial.print("Peso final: ");
+      Serial.println(weight);
+      weightPrinted = true; // Evita imprimir más de una vez el mismo peso
+    }
+
+    lastWeight = weight; // Guardamos la última lectura
     newDataReady = false;
   }
 
-  // Recibe comandos por el monitor serie
+  // Recibir comandos desde el monitor serie
   if (Serial.available() > 0) {
     char inByte = Serial.read();
     if (inByte == 't') LoadCell.tareNoDelay(); // Realiza la tara
     else if (inByte == 'r') calibrate(); // Calibra
   }
 
-  // Verifica si la operación de tara ha finalizado
+  // Verifica si la tara ha terminado
   if (LoadCell.getTareStatus()) {
     Serial.println("Tara completa");
   }

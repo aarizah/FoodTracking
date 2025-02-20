@@ -8,10 +8,9 @@
         {
             "name": "PlatformIO",
             "includePath": [
-                "C:/Users/ariza/Desktop/NutriTech/Arduino/Weight/include",
-                "C:/Users/ariza/Desktop/NutriTech/Arduino/Weight/src",
-                "C:/Users/ariza/Desktop/NutriTech/Arduino/Weight/.pio/libdeps/esp32doit-devkit-v1/HX711_ADC/src",
-                "C:/Users/ariza/Desktop/NutriTech/Arduino/Weight/.pio/libdeps/esp32doit-devkit-v1/HX711/src",
+                "C:/Users/ariza/Desktop/NutriTech/FoodTrackerCode/Weight/include",
+                "C:/Users/ariza/Desktop/NutriTech/FoodTrackerCode/Weight/src",
+                "C:/Users/ariza/Desktop/NutriTech/FoodTrackerCode/Weight/.pio/libdeps/esp32doit-devkit-v1/HX711_ADC/src",
                 "C:/Users/ariza/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/newlib/platform_include",
                 "C:/Users/ariza/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/freertos/include",
                 "C:/Users/ariza/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/freertos/include/esp_additions/freertos",
@@ -246,10 +245,9 @@
             "browse": {
                 "limitSymbolsToIncludedHeaders": true,
                 "path": [
-                    "C:/Users/ariza/Desktop/NutriTech/Arduino/Weight/include",
-                    "C:/Users/ariza/Desktop/NutriTech/Arduino/Weight/src",
-                    "C:/Users/ariza/Desktop/NutriTech/Arduino/Weight/.pio/libdeps/esp32doit-devkit-v1/HX711_ADC/src",
-                    "C:/Users/ariza/Desktop/NutriTech/Arduino/Weight/.pio/libdeps/esp32doit-devkit-v1/HX711/src",
+                    "C:/Users/ariza/Desktop/NutriTech/FoodTrackerCode/Weight/include",
+                    "C:/Users/ariza/Desktop/NutriTech/FoodTrackerCode/Weight/src",
+                    "C:/Users/ariza/Desktop/NutriTech/FoodTrackerCode/Weight/.pio/libdeps/esp32doit-devkit-v1/HX711_ADC/src",
                     "C:/Users/ariza/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/newlib/platform_include",
                     "C:/Users/ariza/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/freertos/include",
                     "C:/Users/ariza/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/freertos/include/esp_additions/freertos",
