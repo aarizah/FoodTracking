@@ -17,26 +17,22 @@ app.use('/upload', express.raw({ type: 'application/octet-stream', limit: '10mb'
 
 // 📌 Ruta para recibir imágenes en binario
 app.post('/upload', (req, res) => {
-  if (!req.body || !Buffer.isBuffer(req.body)) {
-    return res.status(400).json({ error: 'No se recibieron datos binarios.' });
-  }
-
-  const fileName = `image_${Date.now()}.jpg`;
-  const filePath = path.join(__dirname, fileName);
-
-
-  fs.writeFile(filePath, req.body, (err) => { // Función para guardar la imagen. fs.writeFile
-    if (err) {
-      console.error("Error al guardar la imagen:", err);
-      return res.status(500).json({ error: 'Error al guardar la imagen.' });
-    }
-    console.log(`📸 Imagen guardada: ${fileName}`);
-    res.json({ message: 'Imagen recibida y guardada.', fileName });
+    const imageID = req.headers['x-image-id']; // Leer el ID desde la cabecera
+    const fileName = `image_${imageID}.jpg`; // Guardar la imagen con su identificador
+    const filePath = path.join(__dirname, fileName);
+  
+    // Guardar la imagen en el servidor
+    fs.writeFile(filePath, req.body, (err) => {
+      if (err) {
+        console.error("❌ Error al guardar la imagen:", err);
+        return res.status(500).json({ error: "Error al guardar la imagen." });
+      }
+  
+      console.log(`📸 Imagen guardada con ID: ${fileName}`);
+      res.json({ message: "Imagen recibida y guardada.", fileName });
+    });
   });
-
-});
-
-
+  
 
 
 // 📌 Nueva ruta para recibir JSON
@@ -46,8 +42,6 @@ app.post('/json', (req, res) => {
   if (!req.body || Object.keys(req.body).length === 0) {
     return res.status(400).json({ error: "El JSON recibido está vacío" });
   }
-
-  console.log("✅ JSON procesado");
 
   res.json({ message: "JSON recibido y procesado"});
 });
@@ -60,8 +54,6 @@ app.post('/string', express.text({ type: 'text/plain', limit: '2mb' }), (req, re
     if (!req.body || req.body.trim().length === 0) {
       return res.status(400).json({ error: "El string recibido está vacío" });
     }
-  
-    console.log("✅ String procesado");
   
     res.json({ message: "String recibido y procesado" });
   });

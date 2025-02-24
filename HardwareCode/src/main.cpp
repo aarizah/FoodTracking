@@ -1,22 +1,54 @@
 #include <Arduino.h>
 #include "camera.h"
 #include "wireless.h"
+#include "balanza.h"
+
+
+float lastWeight = 0.0;  // Última lectura registrada
+const float WEIGHT_THRESHOLD = 2.0; // Umbral para detectar cambio de peso
+const int STABLE_TIME_REQUIRED = 100; // Tiempo en milisegundos que el peso debe ser estable (2 segundos)
+unsigned long stableStartTime = 0;  // Tiempo en que el peso se mantiene estable
+bool weightPrinted = false; // Para evitar imprimir valores intermedios
+int id_number=1; // Identificador de envío
+
+
+
 
 void setup() {
   Serial.begin(115200);
-  delay(1000);
   wifi_setup();
   camera_setup();
+  loadcell_setup();
 
 }
 
 void loop() {
-    camera_fb_t *fb= capture_image();
-    send_image(fb->len, fb->buf);
-    esp_camera_fb_return(fb);
-    send_weight(12.2);
-    send_string("Memoria libre: " + String(ESP.getFreeHeap()) + " bytes");
+    id_number++;
+    String id = String(id_number) ; // Identificador de envío
 
-  
-  delay(10000);  // Espera 10 segundos antes de la siguiente captura
+    actualizarLoadCell();  // ✅ Actualiza la celda de carga una vez por ciclo
+    float weight = obtenerPeso(); // ✅ Obtener peso actualizado
+      
+
+      // Si el peso cambia significativamente, reiniciar el contador de tiempo estable
+      if (abs(weight - lastWeight) > WEIGHT_THRESHOLD) {
+        stableStartTime = millis();  // Reiniciar tiempo de estabilidad
+        weightPrinted = false;  
+    }
+
+    // ✅ Solo imprimimos si el peso se mantiene estable por `STABLE_TIME_REQUIRED` milisegundos
+    if ((millis() - stableStartTime) >= STABLE_TIME_REQUIRED && !weightPrinted) {
+      send_weight(weight,id);
+      camera_fb_t *fb= capture_image();
+      send_image(fb->len, fb->buf, id);
+      esp_camera_fb_return(fb);
+
+      weightPrinted = true;  // Evita imprimir múltiples veces el mismo peso
+    }
+
+    lastWeight = weight; // Guardamos la última lectura
 }
+
+
+
+

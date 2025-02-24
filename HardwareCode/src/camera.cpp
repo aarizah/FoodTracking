@@ -85,8 +85,18 @@ if (s) {
 
 
 camera_fb_t *capture_image(){
-    camera_fb_t * fb = esp_camera_fb_get(); //Capturando Imagen
-    Serial.printf("Imagen capturada. Tamaño: %zu bytes\n", fb->len);
-    return fb;
+  // Captura dummy para limpiar el buffer
+  camera_fb_t *dummy = esp_camera_fb_get();
+  if (dummy) {
+    esp_camera_fb_return(dummy);
+  }
+  delay(50);  // Un pequeño retardo para que se capture una nueva imagen
+
+  // Captura la imagen actual
+  camera_fb_t *fb = esp_camera_fb_get();
+  return fb;
 }
+
+
+
 
