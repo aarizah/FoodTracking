@@ -18,12 +18,13 @@ void setup() {
   Serial.begin(115200);
   wifi_setup();
   camera_setup();
+  ota_setup();  // ✅ Inicializar OTA
   loadcell_setup();
-
+  delay(5000);
 }
 
 void loop() {
-    id_number++;
+    ota_handle();  // ✅ Procesar OTA en cada ciclo
     String id = String(id_number) ; // Identificador de envío
 
     actualizarLoadCell();  // ✅ Actualiza la celda de carga una vez por ciclo
@@ -38,6 +39,7 @@ void loop() {
 
     // ✅ Solo imprimimos si el peso se mantiene estable por `STABLE_TIME_REQUIRED` milisegundos
     if ((millis() - stableStartTime) >= STABLE_TIME_REQUIRED && !weightPrinted) {
+      id_number++;
       send_weight(weight,id);
       camera_fb_t *fb= capture_image();
       send_image(fb->len, fb->buf, id);

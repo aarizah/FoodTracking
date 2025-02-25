@@ -18,7 +18,45 @@ void wifi_setup(){
     Serial.print(".");
   }
   Serial.println("\nWiFi conectado.");
+  
 }
+
+
+// ✅ Configuración OTA
+void ota_setup() {
+  ArduinoOTA.setHostname("ESP32S3-OTA");
+
+  ArduinoOTA.onStart([]() {
+    Serial.println("Inicio de actualización OTA...");
+  });
+
+  ArduinoOTA.onEnd([]() {
+    Serial.println("\nActualización OTA completada.");
+  });
+
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    Serial.printf("Progreso: %u%%\r", (progress * 100) / total);
+  });
+
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("Error OTA[%u]: ", error);
+    if (error == OTA_AUTH_ERROR) Serial.println("Error de autenticación");
+    else if (error == OTA_BEGIN_ERROR) Serial.println("Error al comenzar");
+    else if (error == OTA_CONNECT_ERROR) Serial.println("Error de conexión");
+    else if (error == OTA_RECEIVE_ERROR) Serial.println("Error de recepción");
+    else if (error == OTA_END_ERROR) Serial.println("Error al finalizar");
+  });
+
+  ArduinoOTA.begin();
+  Serial.println("OTA listo!");
+}
+
+// ✅ Función para manejar OTA en cada loop
+void ota_handle() {
+  ArduinoOTA.handle();
+}
+
+
 
 void send_image(size_t size, uint8_t *data, String imageID) {
   if (WiFi.status() != WL_CONNECTED) {
