@@ -1,8 +1,7 @@
-#include <Arduino.h>
 #include "camera.h"
 #include "wireless.h"
 #include "balanza.h"
-
+#include "boton.h"
 
 float lastWeight = 0.0;  // Última lectura registrada
 const float WEIGHT_THRESHOLD = 2.0; // Umbral para detectar cambio de peso
@@ -20,15 +19,28 @@ void setup() {
   camera_setup();
   ota_setup();  // ✅ Inicializar OTA
   loadcell_setup();
+  boton_setup();
   delay(5000);
 }
 
 void loop() {
-    ota_handle();  // ✅ Procesar OTA en cada ciclo
-    String id = String(id_number) ; // Identificador de envío
+  ota_handle();  // ✅ Procesar OTA en cada ciclo
+  String id = String(id_number) ; // Identificador de envío
 
-    actualizarLoadCell();  // ✅ Actualiza la celda de carga una vez por ciclo
-    float weight = obtenerPeso(); // ✅ Obtener peso actualizado
+  actualizarLoadCell();  // ✅ Actualiza la celda de carga una vez por ciclo
+  float weight = obtenerPeso(); // ✅ Obtener peso actualizado
+
+
+  if (presionar_boton()) {
+    Serial.println("Botón presionado!");
+    id_number++;
+    send_weight(weight,id,"1");
+    camera_fb_t *fb= capture_image();
+    send_image(fb->len, fb->buf, id,"1");
+    esp_camera_fb_return(fb);
+  }
+
+
       
 
       // Si el peso cambia significativamente, reiniciar el contador de tiempo estable
@@ -40,9 +52,9 @@ void loop() {
     // ✅ Solo imprimimos si el peso se mantiene estable por `STABLE_TIME_REQUIRED` milisegundos
     if ((millis() - stableStartTime) >= STABLE_TIME_REQUIRED && !weightPrinted) {
       id_number++;
-      send_weight(weight,id);
+      send_weight(weight,id,"0");
       camera_fb_t *fb= capture_image();
-      send_image(fb->len, fb->buf, id);
+      send_image(fb->len, fb->buf, id,"0");
       esp_camera_fb_return(fb);
 
       weightPrinted = true;  // Evita imprimir múltiples veces el mismo peso

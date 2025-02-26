@@ -20,13 +20,13 @@ app.use('/upload', express.raw({ type: 'application/octet-stream', limit: '10mb'
 // 📌 Ruta para recibir imágenes en binario
 app.post('/upload', (req, res) => {
     const imageID = req.headers['x-image-id']; // Leer el ID desde la cabecera
-
+    const priorID = req.headers['x-id-prior']; // Leer el ID desde la cabecera
     // Obtener la fecha actual en formato YYYYMMDD
     const now = new Date();
     const formattedDate = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}`;
     
     // Construir el nombre del archivo
-    const fileName = `image_${imageID}_${formattedDate}.jpg`;
+    const fileName = `image_${priorID}_${imageID}_${formattedDate}.jpg`;
     
     // Construir la ruta absoluta de la carpeta "sin_procesar"
     const filePath = path.join(__dirname, "Images", "sin_procesar",fileName);
@@ -88,6 +88,8 @@ function procesar_datos(json){
         moverImagenes(origen, destino, `image_${id}`);
     }
     else{
+
+      
 
         const carpeta = path.join(__dirname, "Images", "openAI");
 

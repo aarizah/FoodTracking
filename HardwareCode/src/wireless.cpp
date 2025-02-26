@@ -58,7 +58,7 @@ void ota_handle() {
 
 
 
-void send_image(size_t size, uint8_t *data, String imageID) {
+void send_image(size_t size, uint8_t *data, String imageID, String ID_prior) {
   if (WiFi.status() != WL_CONNECTED) {
       Serial.println("WiFi desconectado. No se pudo enviar la imagen.");
       return; // Salir de la función si no hay conexión
@@ -68,7 +68,7 @@ void send_image(size_t size, uint8_t *data, String imageID) {
   http.begin(serverName);
   http.addHeader("Content-Type", "application/octet-stream");
   http.addHeader("X-Image-ID", imageID);  // Se envía el ID en la cabecera HTTP
-
+  http.addHeader("X-ID-Prior", ID_prior); // Se envía el ID_prior en la cabecera HTTP
   // Enviar la imagen en binario sin esperar respuesta
   http.POST(data, size);
 
@@ -105,7 +105,7 @@ void send_string(String str) {
 }
 
 
-void send_weight(float weight, String id) {
+void send_weight(float weight, String id, String ID_prior) {
   if (WiFi.status() != WL_CONNECTED) {
       Serial.println("WiFi desconectado. No se pudo enviar el JSON.");
       return; // Salir de la función si no hay conexión
@@ -120,6 +120,7 @@ void send_weight(float weight, String id) {
   jsonDoc["device"] = "ESP32";
   jsonDoc["weight"] = weight;
   jsonDoc["id"] = id;
+  jsonDoc["ID_prior"] = ID_prior;
 
   String jsonStr;
   serializeJson(jsonDoc, jsonStr);
