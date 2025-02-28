@@ -1,12 +1,12 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const { OpenAI } = require('openai'); // Usando el SDK oficial
 
 const app = express();
 const port = 3000;
 let hardware_data={}; //Variable para guardar los datos del hardware que llegan al servidor
 let hardware_data_openai=[{peso:0,id:0},{peso:0,id:0}]; //Variable para guardar los datos que se envian a OpenAI
-let hardware_data_procesado=[]; //Variable para guardar el historico de los datos
 
 
 // Middleware para procesar JSON
@@ -111,18 +111,42 @@ function procesar_datos(json){
             if (cantidad === 0) {
                 //imagen a carpeta de chatGPT
                 moverImagenes(origen, destino, `image_${id_prior}_${id}`,formattedDate);
-                hardware_data_openai[0].peso=peso;
-                hardware_data_openai[0].id=id;
+                hardware_data_openai.push({"peso":peso,"id":formattedDate});
 
             } else if (cantidad === 1) {
                 //imagen a carpeta de chatGPT
-                moverImagenes(origen, destino, `image_${id_prior}_${id}`,formattedDate);
-                hardware_data_openai[1].peso=peso;
-                hardware_data_openai[1].id=id;
+                
+                hardware_data_openai.push({"peso":peso,"id":formattedDate});
+
+                // CALL OPEN AI API 
+                // 🔹 EJEMPLO DE USO
+                moverImagenes(origen, destino, `image_${id_prior}_${id}`, formattedDate)
+                .then(() => {
+                    return openAI_API(); // Llamar a la API solo después de que las imágenes se hayan movido
+                })
+                .then((resultado) => {
+                    console.log("🍽️ Resultado:", resultado);
+                })
+                .catch((error) => {
+                    console.error("❌ Error:", error);
+                });
+            
             } else {
-                moverImagenes(origen, destino, `image_${id_prior}_${id}`,formattedDate);
+
                 const carpetaOpenAI = path.join(__dirname, "Images", "openAI");
                 const carpetaProcesados = path.join(__dirname, "Images", "procesadas");
+                hardware_data_openai.shift();
+                hardware_data_openai.push({"peso":peso,"id":formattedDate});
+                moverImagenes(origen, destino, `image_${id_prior}_${id}`, formattedDate)
+                .then(() => {
+                    return openAI_API(); // Llamar a la API solo después de que las imágenes se hayan movido
+                })
+                .then((resultado) => {
+                    console.log("🍽️ Resultado:", resultado);
+                })
+                .catch((error) => {
+                    console.error("❌ Error:", error);
+                });
                 moverImagenMasAntigua(carpetaOpenAI, carpetaProcesados);
             }
         });
@@ -131,45 +155,57 @@ function procesar_datos(json){
     
     }
     const json_procesado = {"id":formattedDate,"peso":peso,"id_prior":id_prior};
-    hardware_data_procesado.push(json_procesado);//dato a historico
+    guardarHistorico(json_procesado);
 }
 
-function moverImagenes(carpetaOrigen, carpetaDestino,criterio,nuevoNombre){
-// Definir carpetas
-//const carpetaOrigen = 'ruta/a/la/carpeta/origen';  // Cambia esto a tu carpeta origen
-//const carpetaDestino = 'ruta/a/la/carpeta/destino'; // Cambia esto a tu carpeta destino
-
-// Asegurar que la carpeta de destino exista
-if (!fs.existsSync(carpetaDestino)) {
-    fs.mkdirSync(carpetaDestino, { recursive: true });
-}
-
-// Criterio: mover archivos que contengan "imagen" en el nombre
-fs.readdir(carpetaOrigen, (err, archivos) => {
-    if (err) {
-        console.error('Error al leer la carpeta:', err);
-        return;
-    }
-
-    archivos.forEach(archivo => {
-        if (archivo.includes(criterio)) { // Cambia esto según tu criterio
-            const extension = path.extname(archivo); // Obtener la extensión (.jpg, .png, etc.)
-            const nuevoArchivo = `${nuevoNombre}${extension}`; // Renombrar con el ID único
-            const rutaOrigen = path.join(carpetaOrigen, archivo);
-            const rutaDestino = path.join(carpetaDestino, nuevoArchivo);
-
-            // Mover archivo
-            fs.rename(rutaOrigen, rutaDestino, (err) => {
-                if (err) {
-                    console.error(`Error al mover el archivo ${archivo}:`, err);
-                } else {
-                    console.log(`Archivo movido: ${archivo}`);
-                }
-            });
+function moverImagenes(carpetaOrigen, carpetaDestino, criterio, nuevoNombre) {
+    return new Promise((resolve, reject) => {
+        // Asegurar que la carpeta de destino exista
+        if (!fs.existsSync(carpetaDestino)) {
+            fs.mkdirSync(carpetaDestino, { recursive: true });
         }
+
+        fs.readdir(carpetaOrigen, (err, archivos) => {
+            if (err) {
+                return reject(`Error al leer la carpeta: ${err}`);
+            }
+
+            // Filtrar archivos que cumplan con el criterio
+            const archivosFiltrados = archivos.filter(archivo => archivo.includes(criterio));
+
+            if (archivosFiltrados.length === 0) {
+                console.log("No se encontraron archivos para mover.");
+                return resolve(); // No hay nada que mover, resolvemos la promesa
+            }
+
+            // Array de promesas para mover los archivos
+            const promesas = archivosFiltrados.map(archivo => {
+                return new Promise((res, rej) => {
+                    const extension = path.extname(archivo);
+                    const nuevoArchivo = `${nuevoNombre}${extension}`;
+                    const rutaOrigen = path.join(carpetaOrigen, archivo);
+                    const rutaDestino = path.join(carpetaDestino, nuevoArchivo);
+
+                    fs.rename(rutaOrigen, rutaDestino, (err) => {
+                        if (err) {
+                            console.error(`Error al mover el archivo ${archivo}:`, err);
+                            rej(err);
+                        } else {
+                            console.log(`✅ Archivo movido: ${archivo} -> ${nuevoArchivo}`);
+                            res();
+                        }
+                    });
+                });
+            });
+
+            // Esperar a que todos los archivos se muevan antes de resolver
+            Promise.all(promesas)
+                .then(() => resolve())
+                .catch(reject);
+        });
     });
-});
 }
+
 
 function moverImagenMasAntigua(origen, destino) {
     // Leer la carpeta de origen
@@ -216,5 +252,141 @@ function moverImagenMasAntigua(origen, destino) {
     });
 }
 
+
+
+// Ruta del archivo JSON donde se guardará el histórico
+const path_historico = path.join(__dirname, 'historico.json');
+
+// Función para cargar los datos actuales del archivo JSON
+function cargarHistorico() {
+    try {
+        if (fs.existsSync(path_historico)) {
+            const data = fs.readFileSync(path_historico, 'utf8');
+            return JSON.parse(data);
+        } else {
+            return []; // Si no existe, devuelve un array vacío
+        }
+    } catch (error) {
+        console.error("Error al leer el archivo JSON:", error);
+        return [];
+    }
+}
+
+// Función para agregar un nuevo dato al archivo JSON
+function guardarHistorico(nuevoDato) {
+    const historico = cargarHistorico(); // Cargar datos previos
+    historico.push(nuevoDato); // Agregar nuevo dato
+
+    try {
+        fs.writeFileSync(path_historico, JSON.stringify(historico, null, 4), 'utf8'); // Guardar con formato legible
+        console.log("✅ Dato agregado al histórico con éxito.");
+    } catch (error) {
+        console.error("❌ Error al guardar en el archivo JSON:", error);
+    }
+}
+
+
+
+
+// OPEN AI .----------------------------------------------------------------------------------
+
+// 🔹 Inicializa el cliente de OpenAI con tu API Key
+const openai = new OpenAI({
+  apiKey: "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" // 🔑 Sustituye esto con tu clave de OpenAI
+});
+
+async function openAI_API() {
+    try {
+        // 🔹 RUTA DONDE ESTÁN LAS IMÁGENES
+        const directorioImagenes = path.join(__dirname, "Images", "openAI");
+        let archivos = fs.readdirSync(directorioImagenes);
+
+        if (archivos.length < 2) {
+            console.error("❌ No hay suficientes imágenes en el directorio.");
+            return [];
+        }
+
+        // Seleccionamos la imagen más antigua y la más reciente
+        const nombreImagen1 = archivos[archivos.length - 2]; // Penultima
+        const nombreImagen2 = archivos[archivos.length - 1]; // Más nueva
+        const rutaImagen1 = path.join(directorioImagenes, nombreImagen1);
+        const rutaImagen2 = path.join(directorioImagenes, nombreImagen2);
+
+        // 🔹 LEER Y CONVERTIR LAS IMÁGENES A BASE64
+        const imagen1Base64 = fs.readFileSync(rutaImagen1, { encoding: 'base64' });
+        const imagen2Base64 = fs.readFileSync(rutaImagen2, { encoding: 'base64' });
+
+        // 🔹 SOLICITUD A OPENAI
+        const response = await openai.chat.completions.create({
+            model: "gpt-4o", // ✅ Modelo avanzado para análisis de imágenes
+            messages: [
+                {
+                    "role": "system",
+                    "content": `Recibirás dos imágenes: la primera es la referencia y la segunda es la imagen a analizar. 
+                    Tu tarea es:
+
+                    🔍 **Comparación**:
+                    - Analiza ambas imágenes y detecta qué alimentos aparecen en la segunda imagen que no estaban en la primera.
+
+                    📝 **Generación del Array de Objetos**:
+                    - Por cada alimento nuevo detectado, crea un objeto con la siguiente estructura:
+                        - **nombre**: Nombre del alimento.
+                        - **porcentaje**: Porcentaje del peso total que aporta ese alimento (la suma de todos los porcentajes debe ser 100%).
+                        - **calorias**: Calorías del ingrediente por cada 100 gramos.
+                        - **grasas**: Gramos de grasa por cada 100 gramos.
+                        - **proteinas**: Gramos de proteína por cada 100 gramos.
+                        - **carbohidratos**: Gramos de carbohidratos por cada 100 gramos.
+                        - **fibra**: Cantidad de fibra.
+                        - **hierro**: Cantidad de hierro.
+                        - **calcio**: Cantidad de calcio.
+                        - **vitamina_d**: Cantidad de vitamina D.
+                        - **magnesio**: Cantidad de magnesio.
+                        - **zinc**: Cantidad de zinc.
+                        - **vitamina_c**: Cantidad de vitamina C.
+                        - **omega3**: Cantidad de omega-3.
+                        - **biotina_b7**: Cantidad de biotina B7.
+
+                    🎯 **Reglas de clasificación**:
+                    - **Si se trata de una mezcla**:
+                        - Verifica si existe en la base de datos una entrada específica para esa mezcla (ejemplo: ajiaco, espagueti a la boloñesa, arroz con pollo, etc.).
+                        - Si existe, utiliza la información de la mezcla completa en lugar de desglosar sus ingredientes.
+                    - **Si no es una mezcla**:
+                        - Registra cada nuevo alimento de forma individual.
+                    - **Si no se detecta ningún alimento nuevo**:
+                        - Devuelve un array vacío [].
+                    En todos los casos devuelve solo el JSON o array en formato válido, sin texto adicional.
+                        `
+                    
+                },
+                {
+                    role: "user",
+                    content: [
+                        { type: "text", text: "Aquí están las imágenes para analizar:" },
+                        { 
+                            type: "image_url", 
+                            image_url: { url: `data:image/jpeg;base64,${imagen1Base64}` }
+                        },
+                        { 
+                            type: "image_url", 
+                            image_url: { url: `data:image/jpeg;base64,${imagen2Base64}` }
+                        }
+                    ]
+                }
+            ],
+            temperature: 0, 
+            max_tokens: 1024, 
+            top_p: 1, 
+            frequency_penalty: 0, 
+            presence_penalty: 0 
+        });
+
+        // 🔹 PROCESAR RESPUESTA
+        const resultado = response.choices[0].message.content;
+        return resultado; // Devuelve el array de objetos con la información de los alimentos
+    } catch (error) {
+        console.error("❌ Error al procesar la solicitud:", error);
+        return [];
+    }
+}
 
 
