@@ -3,18 +3,23 @@ const fs = require('fs');
 const path = require('path');
 const { OpenAI } = require('openai'); // Usando el SDK oficial
 
+// Variables para guardar los datos de hardware
+let hardware_data_openai=[]; //Variable para guardar los datos que se envian a OpenAI
+
+// Variables para procesar y guardar los datos
+
+
+// Inicializar el servidor
 const app = express();
 const port = 3000;
-let hardware_data={}; //Variable para guardar los datos del hardware que llegan al servidor
-let hardware_data_openai=[{peso:0,id:0},{peso:0,id:0}]; //Variable para guardar los datos que se envian a OpenAI
 
+// SERVIDOR ----------------------------------------------------------------------------------
 
 // Middleware para procesar JSON
 app.use(express.json({ limit: '5mb' })); //Permite que el servidor reciba JSON con un tamaño máximo de 5MB.
 
 // Middleware para procesar datos binarios (imágenes)
 app.use('/upload', express.raw({ type: 'application/octet-stream', limit: '10mb' })); //Permite recibir datos binarios (como imágenes) de hasta 10MB en la ruta /upload.
-
 
 
 // 📌 Ruta para recibir imágenes en binario
@@ -45,6 +50,7 @@ app.post('/upload', (req, res) => {
   
 
 
+
 // 📌 Nueva ruta para recibir JSON
 app.post('/json', (req, res) => {
   console.log("📩 JSON recibido:", req.body);
@@ -53,9 +59,9 @@ app.post('/json', (req, res) => {
   }
 
   res.json({ message: "JSON recibido y procesado"});
-  hardware_data=(req.body);
-  procesar_datos(hardware_data);
+  procesar_datos(req.body);
 });
+
 
 
 // 📌 Nueva ruta para recibir Strings // Aca se inicializa el middleware
@@ -70,11 +76,21 @@ app.post('/string', express.text({ type: 'text/plain', limit: '2mb' }), (req, re
   });
   
 
-
 // Iniciar el servidor
 app.listen(port, () => {
   console.log(`🚀 Servidor escuchando en http://localhost:${port}`);
 });
+
+
+
+
+
+
+
+
+
+
+// PROCESAR DATOS ----------------------------------------------------------------------------------
 
 
 
@@ -83,41 +99,51 @@ function procesar_datos(json){
     let id = json.id;
     let id_prior = json.ID_prior;
     const now = new Date();
-    const formattedDate = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}_${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}${now.getSeconds().toString().padStart(2, '0')}`;
-
+    const formattedDate = `${now.getFullYear()}_${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}_${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}${now.getSeconds().toString().padStart(2, '0')}`;
+    //  Imagenes/sin_procesar -> Imagenes/descarte
     if (peso<5){
-
-
-        // imagen a carpeta de descarte
         const origen = path.join(__dirname, "Images", "sin_procesar");
         const destino = path.join(__dirname, "Images", "descarte");
-
         moverImagenes(origen, destino, `image_${id_prior}_${id}`,formattedDate);
     }
+
     else{
+
+        // Imagenes/sin_procesar -> imagenes/procesadas 
       if (id_prior==0){
         const origen = path.join(__dirname, "Images", "sin_procesar");
         const destino = path.join(__dirname, "Images", "procesadas");
         moverImagenes(origen, destino, `image_${id_prior}_${id}`,formattedDate);
+      }
 
-      }     
-      else {
-        const carpeta = path.join(__dirname, "Images", "openAI");
+      //Imagenes/sin_procesar -> Imagenes/openAI -> Imagenes/procesadas
+      //Hardware_data_openAI.push->.push->.shift->.push->.shift->.push ...
+      // API -> Procesar_Datos_Finales -> Guardar_Datos
+
+      else {    
         const origen = path.join(__dirname, "Images", "sin_procesar");
         const destino = path.join(__dirname, "Images", "openAI");
-        fs.readdir(carpeta, (_, archivos) => {
+        fs.readdir(destino, (_, archivos) => {
             const cantidad = archivos.length;
             console.log(`Cantidad de imágenes encontradas: ${cantidad}`);
-            if (cantidad === 0) {
-                //imagen a carpeta de chatGPT
+
+            //Imagen a carpeta openAI y guarda en hardware_data_openai peso,id
+            if (cantidad === 0) { 
                 moverImagenes(origen, destino, `image_${id_prior}_${id}`,formattedDate);
                 hardware_data_openai.push({"peso":peso,"id":formattedDate});
 
-            } else if (cantidad === 1) {
-                //imagen a carpeta de chatGPT
+            } 
+
+            //imagen a carpeta de chatGPT y guarda en hardware_data_openai peso,id
+            //llama a la API de openAI
+            //llama a procesar datos finales con la diferencia de peso y el resultado de la API
+            else if (cantidad === 1) {
+                
                 
                 hardware_data_openai.push({"peso":peso,"id":formattedDate});
-
+                console.log(hardware_data_openai);
+                const dif_peso= hardware_data_openai[1].peso-hardware_data_openai[0].peso;
+                console.log("Peso:"+dif_peso);
                 // CALL OPEN AI API 
                 // 🔹 EJEMPLO DE USO
                 moverImagenes(origen, destino, `image_${id_prior}_${id}`, formattedDate)
@@ -125,39 +151,210 @@ function procesar_datos(json){
                     return openAI_API(); // Llamar a la API solo después de que las imágenes se hayan movido
                 })
                 .then((resultado) => {
-                    console.log("🍽️ Resultado:", resultado);
+                    procesamiento_final(ajson(resultado),dif_peso,formattedDate);
                 })
                 .catch((error) => {
                     console.error("❌ Error:", error);
                 });
             
-            } else {
+            } 
+            //Quita ultimo valor de hardware_data_openai y agrega el nuevo
+            //imagen a carpeta de chatGPT 
+            //llama a la API de openAI
+            //llama a procesar datos finales con la diferencia de peso y el resultado de la API
+            //Quita la imagen más antigua de carpeta chatGPT y la mueve a procesadas
+            else {
 
-                const carpetaOpenAI = path.join(__dirname, "Images", "openAI");
                 const carpetaProcesados = path.join(__dirname, "Images", "procesadas");
                 hardware_data_openai.shift();
                 hardware_data_openai.push({"peso":peso,"id":formattedDate});
+                const dif_peso= hardware_data_openai[1].peso-hardware_data_openai[0].peso;
+                console.log("Peso:"+dif_peso);
+                // CALL OPEN AI API
                 moverImagenes(origen, destino, `image_${id_prior}_${id}`, formattedDate)
                 .then(() => {
                     return openAI_API(); // Llamar a la API solo después de que las imágenes se hayan movido
                 })
                 .then((resultado) => {
                     console.log("🍽️ Resultado:", resultado);
+                    procesamiento_final(ajson(resultado),dif_peso,formattedDate);
                 })
                 .catch((error) => {
                     console.error("❌ Error:", error);
                 });
-                moverImagenMasAntigua(carpetaOpenAI, carpetaProcesados);
+                moverImagenMasAntigua(destino, carpetaProcesados);
             }
         });
 
       } 
     
     }
-    const json_procesado = {"id":formattedDate,"peso":peso,"id_prior":id_prior};
-    guardarHistorico(json_procesado);
+  //  const json_procesado = {"id":formattedDate,"peso":peso,"id_prior":id_prior};
+  // guardarHistorico(json_procesado);
 }
 
+
+function procesamiento_final(json,peso,nombre_imagen){
+  const json_procesado=structuredClone(json);
+  const filePath = "./registro_alimentos.json";
+  const fecha=obtenerFechaActual();
+  const horas=obtenerHoraActual();
+  //Verificar si ya existe un archivo si no crearlo
+  if (!fs.existsSync(filePath)) {
+    // Crear la estructura inicial del JSON
+    const datosIniciales = [
+        {
+          "_id": "alexh1000_"+fecha,
+          "usuario_id": "alexh1000",
+          "fecha": fecha,
+          "resumen":{
+            "resumenCalorias": 0,
+            "resumenGrasas":0,
+            "resumenProteinas":0,
+            "resumenCarbohidratos":0,
+            "resumenFibra":0,
+            "resumenHierro":0,
+            "resumenCalcio":0,
+            "resumenVitaminaD":0,
+            "resumenMagnesio":0,
+            "resumenZinc":0,
+            "resumenVitaminaC":0,
+            "resumenOmega3":0,
+            "resumenBiotinaB7":0
+          },
+          "comidas": [{
+            "tipo": "1",
+            "hora": horas,
+            "alimentos":[]
+          }],
+          "base_datos":[]
+        }
+    ];
+    // Escribir en el archivo con formato JSON
+    fs.writeFileSync(filePath, JSON.stringify(datosIniciales, null, 2));
+  }
+
+  // Leer el archivo y convertirlo a un objeto JavaScript
+  const rawData = fs.readFileSync(filePath, "utf-8"); 
+  const registro_alimentos = JSON.parse(rawData); 
+
+
+  // Si es un nuevo dia
+  if (registro_alimentos[registro_alimentos.length-1].fecha!=fecha){
+
+    registro_alimentos.push({
+      "_id": "alexh1000_"+fecha,
+      "usuario_id": "alexh1000",
+      "fecha": fecha,
+      "resumen":{
+        "resumenCalorias": 0,
+        "resumenGrasas":0,
+        "resumenProteinas":0,
+        "resumenCarbohidratos":0,
+        "resumenFibra":0,
+        "resumenHierro":0,
+        "resumenCalcio":0,
+        "resumenVitaminaD":0,
+        "resumenMagnesio":0,
+        "resumenZinc":0,
+        "resumenVitaminaC":0,
+        "resumenOmega3":0,
+        "resumenBiotinaB7":0
+      },
+      "comidas": [{
+        "tipo": 1,
+        "hora": horas,
+        "alimentos":[]
+      }],
+      "base_datos":[]
+
+    });
+  }
+      //Se le agrega el peso al json
+      json.forEach(element => {  
+        element["foto"]=nombre_imagen+".jpg";
+        registro_alimentos[registro_alimentos.length-1].base_datos.push(element);
+      });
+
+    //Verificar la ultima hora y esta hora
+    //TRUE YA PASO UNA HORA
+    if(tiempoTranscurrido(registro_alimentos[registro_alimentos.length-1].comidas[registro_alimentos[registro_alimentos.length-1].comidas.length-1].hora,horas,3))
+      {
+        comida_anterior=registro_alimentos[registro_alimentos.length-1].comidas[registro_alimentos[registro_alimentos.length-1].comidas.length-1].tipo;
+        
+        registro_alimentos[registro_alimentos.length-1].comidas.push({
+          "tipo": (+comida_anterior + 1).toString(),
+          "hora": horas,
+          "alimentos":[]
+        });
+      }
+
+  // Aca siempre voy a tener Archivo creado, dia actual, comida actual, falta agregarle alimentos
+
+
+
+  json_procesado.forEach(element => {
+    const peso_cada_ingrediente=peso*element["porcentaje"]/100;
+    element["foto"]=nombre_imagen+".jpg";
+    element["calorias"]=peso_cada_ingrediente*element["calorias"]/100;//Son por cada 100 gramos
+    element["grasas"]=peso_cada_ingrediente*element["grasas"]/100;//Son por cada 100 gramos
+    element["proteinas"]=peso_cada_ingrediente*element["proteinas"]/100;//Son por cada 100 gramos
+    element["carbohidratos"]=peso_cada_ingrediente*element["carbohidratos"]/100;//Son por cada 100 gramos
+    element["fibra"]=peso_cada_ingrediente*element["fibra"]/100;//Son por cada 100 gramos
+    element["hierro"]=peso_cada_ingrediente*element["hierro"]/100;//Son por cada 100 gramos
+    element["calcio"]=peso_cada_ingrediente*element["calcio"]/100;//Son por cada 100 gramos
+    element["vitamina_d"]=peso_cada_ingrediente*element["vitamina_d"]/100;//Son por cada 100 gramos
+    element["magnesio"]=peso_cada_ingrediente*element["magnesio"]/100;//Son por cada 100 gramos
+    element["zinc"]=peso_cada_ingrediente*element["zinc"]/100;//Son por cada 100 gramos
+    element["vitamina_c"]=peso_cada_ingrediente*element["vitamina_c"]/100;//Son por cada 100 gramos
+    element["omega3"]=peso_cada_ingrediente*element["omega3"]/100;//Son por cada 100 gramos
+    element["biotina_b7"]=peso_cada_ingrediente*element["biotina_b7"]/100;//Son por cada 100 gramos
+    element["peso"]=peso;
+   registro_alimentos[registro_alimentos.length-1].comidas[registro_alimentos[registro_alimentos.length-1].comidas.length-1].alimentos.push(element);
+   
+   registro_alimentos[registro_alimentos.length-1].resumen.resumenCalorias+=element["calorias"];
+   registro_alimentos[registro_alimentos.length-1].resumen.resumenGrasas+=element["grasas"];
+   registro_alimentos[registro_alimentos.length-1].resumen.resumenProteinas += element["proteinas"];
+   registro_alimentos[registro_alimentos.length-1].resumen.resumenCarbohidratos += element["carbohidratos"];
+   registro_alimentos[registro_alimentos.length-1].resumen.resumenFibra += element["fibra"];
+   registro_alimentos[registro_alimentos.length-1].resumen.resumenHierro += element["hierro"];
+   registro_alimentos[registro_alimentos.length-1].resumen.resumenCalcio += element["calcio"];
+   registro_alimentos[registro_alimentos.length-1].resumen.resumenVitaminaD += element["vitamina_d"];
+   registro_alimentos[registro_alimentos.length-1].resumen.resumenMagnesio += element["magnesio"];
+   registro_alimentos[registro_alimentos.length-1].resumen.resumenZinc += element["zinc"];
+   registro_alimentos[registro_alimentos.length-1].resumen.resumenVitaminaC += element["vitamina_c"];
+   registro_alimentos[registro_alimentos.length-1].resumen.resumenOmega3 += element["omega3"];
+   registro_alimentos[registro_alimentos.length-1].resumen.resumenBiotinaB7 += element["biotina_b7"];
+   
+  });
+
+
+  fs.writeFileSync(filePath, JSON.stringify(registro_alimentos, null, 2));
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// FUNCIONES AUXILIARES ----------------------------------------------------------------------------------
+
+// Mueve Imagen de una carpeta a otra y le cambia el nombre
 function moverImagenes(carpetaOrigen, carpetaDestino, criterio, nuevoNombre) {
     return new Promise((resolve, reject) => {
         // Asegurar que la carpeta de destino exista
@@ -206,7 +403,7 @@ function moverImagenes(carpetaOrigen, carpetaDestino, criterio, nuevoNombre) {
     });
 }
 
-
+// Mueve la imagen más antigua de una carpeta a otra
 function moverImagenMasAntigua(origen, destino) {
     // Leer la carpeta de origen
     fs.readdir(origen, (err, archivos) => {
@@ -252,40 +449,65 @@ function moverImagenMasAntigua(origen, destino) {
     });
 }
 
+// Función para extraer el JSON de un string
+function ajson(casi_json) {
+  // Nueva regex para capturar el JSON sin importar qué haya antes
+  const regex = /json\s*([\s\S]*?)\s*```/;  
 
-
-// Ruta del archivo JSON donde se guardará el histórico
-const path_historico = path.join(__dirname, 'historico.json');
-
-// Función para cargar los datos actuales del archivo JSON
-function cargarHistorico() {
-    try {
-        if (fs.existsSync(path_historico)) {
-            const data = fs.readFileSync(path_historico, 'utf8');
-            return JSON.parse(data);
-        } else {
-            return []; // Si no existe, devuelve un array vacío
-        }
-    } catch (error) {
-        console.error("Error al leer el archivo JSON:", error);
-        return [];
-    }
+  const match = casi_json.match(regex);
+  
+  if (match && match[1]) {
+      try {
+          const json = JSON.parse(match[1].trim()); // Convertimos el texto en JSON
+          return json;
+      } catch (error) {
+          console.error("Error al parsear JSON:", error);
+          return null;
+      }
+  }
+  console.warn("No se encontró JSON en la respuesta.");
+  return null;
 }
 
-// Función para agregar un nuevo dato al archivo JSON
-function guardarHistorico(nuevoDato) {
-    const historico = cargarHistorico(); // Cargar datos previos
-    historico.push(nuevoDato); // Agregar nuevo dato
-
-    try {
-        fs.writeFileSync(path_historico, JSON.stringify(historico, null, 4), 'utf8'); // Guardar con formato legible
-        console.log("✅ Dato agregado al histórico con éxito.");
-    } catch (error) {
-        console.error("❌ Error al guardar en el archivo JSON:", error);
-    }
+// Funcion para obtener la fecha actual en formato YYYY-MM-DD
+function obtenerFechaActual() {
+    const hoy = new Date();
+    const año = hoy.getFullYear();
+    const mes = String(hoy.getMonth() + 1).padStart(2, '0'); // Meses van de 0-11, sumamos 1
+    const dia = String(hoy.getDate()).padStart(2, '0'); // Aseguramos que tenga dos dígitos
+    return `${año}-${mes}-${dia}`;
 }
 
+// Función para obtener la hora actual en formato HH:MM:SS
+function obtenerHoraActual() {
+    const ahora = new Date();
+    const horas = String(ahora.getHours()).padStart(2, '0'); // Hora en formato 24h
+    const minutos = String(ahora.getMinutes()).padStart(2, '0'); // Minutos con 2 dígitos
+    const segundos = String(ahora.getSeconds()).padStart(2, '0'); // Segundos con 2 dígitos
+    return `${horas}:${minutos}:${segundos}`;
+}
 
+// Funcion para saber si ya pasó X tiempo entre una hora y otra. 
+function tiempoTranscurrido(horaInicio, horaFin, minutosLimite) {
+  // Extraer HH, MM y SS de las horas en formato HH:MM:SS
+  const [h1, m1, s1] = horaInicio.split(":").map(Number);
+  const [h2, m2, s2] = horaFin.split(":").map(Number);
+
+  // Crear objetos Date con la misma fecha pero con las horas correspondientes
+  const fechaReferencia = new Date();
+  fechaReferencia.setHours(h1, m1, s1, 0); // Establecer hora de inicio
+
+  const fechaComparacion = new Date();
+  fechaComparacion.setHours(h2, m2, s2, 0); // Establecer hora final
+
+  // Calcular la diferencia en milisegundos
+  const diferenciaMs = fechaComparacion.getTime() - fechaReferencia.getTime();
+
+  // Convertir minutos a milisegundos
+  const limiteMs = minutosLimite * 60 * 1000;
+
+  return diferenciaMs >= limiteMs;
+}
 
 
 // OPEN AI .----------------------------------------------------------------------------------
@@ -390,3 +612,174 @@ async function openAI_API() {
 }
 
 
+
+
+
+
+
+
+
+
+
+
+/*
+// Ruta del archivo JSON donde se guardará el histórico
+const path_historico = path.join(__dirname, 'historico.json');
+
+// Función para cargar los datos actuales del archivo JSON
+function cargarHistorico() {
+    try {
+        if (fs.existsSync(path_historico)) {
+            const data = fs.readFileSync(path_historico, 'utf8');
+            return JSON.parse(data);
+        } else {
+            return []; // Si no existe, devuelve un array vacío
+        }
+    } catch (error) {
+        console.error("Error al leer el archivo JSON:", error);
+        return [];
+    }
+}
+
+// Función para agregar un nuevo dato al archivo JSON
+function guardarHistorico(nuevoDato) {
+    const historico = cargarHistorico(); // Cargar datos previos
+    historico.push(nuevoDato); // Agregar nuevo dato
+
+    try {
+        fs.writeFileSync(path_historico, JSON.stringify(historico, null, 4), 'utf8'); // Guardar con formato legible
+        console.log("✅ Dato agregado al histórico con éxito.");
+    } catch (error) {
+        console.error("❌ Error al guardar en el archivo JSON:", error);
+    }
+}
+*/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*
+Colección Usuarios
+{
+   "_id": ObjectId("usuario123"),
+   "nombre": "Alex",
+   "objetivos": {
+      "calorias": 2800,
+      "proteinas": 120,
+      "grasas": 78
+   }
+}
+
+Colección Registro de Alimentos
+[
+  {
+    "_id": "alex123_2024-06-02",
+    "usuario_id": "alex123", // Aca se enlaza con la colección de Usuarios
+    "fecha": "2024-06-02",
+    "comidas":[
+    {
+        "tipo": "desayuno",
+        "hora": "08:00:00",
+        "alimentos": [
+          {
+            "nombre": "papaya",
+            "foto": "123123123.jpg",
+            "calorias": 43,
+            "proteinas": 0.5,
+            "peso": 200
+          },
+          {
+            "nombre": "banana",
+            "calorias": 89,
+            "proteinas": 1.1,
+            "peso": 150
+          }
+        ]
+      },
+      {
+        "tipo": "almuerzo",
+        "hora": "13:00:00",
+        "alimentos": [
+          {
+            "nombre": "huevo frito",
+            "calorias": 196,
+            "proteinas": 13.6,
+            "peso": 100
+          }
+        ]
+      }
+    ],
+
+    "resumen": {
+      "total_calorias": 328,
+      "total_proteinas": 15.2,
+      "total_grasas": 10.2
+    },
+
+    "base_datos_comidas": [
+      {
+        "tipo": "desayuno",
+        "hora": "08:00:00",
+        "alimentos": [
+          {
+            "nombre": "papaya",
+            "calorias": 43,
+            "proteinas": 0.5,
+            "peso": 200
+          },
+          {
+            "nombre": "banana",
+            "calorias": 89,
+            "proteinas": 1.1,
+            "peso": 150
+          }
+        ]
+      },
+      {
+        "tipo": "almuerzo",
+        "hora": "13:00:00",
+        "alimentos": [
+          {
+            "nombre": "huevo frito",
+            "calorias": 196,
+            "proteinas": 13.6,
+            "peso": 100
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "_id": "alex123_2024-06-03",
+    "usuario_id": "alex123",
+    "fecha": "2024-06-03",
+    "total_calorias": 150,
+    "comidas": [
+      {
+        "tipo": "desayuno",
+        "hora": "07:30:00",
+        "alimentos": [
+          {
+            "nombre": "avena",
+            "calorias": 150,
+            "proteinas": 5,
+            "peso": 250
+          }
+        ]
+      }
+    ]
+  }
+]
+
+
+*/

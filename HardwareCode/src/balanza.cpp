@@ -36,12 +36,10 @@ void loadcell_setup() {
 
 
 float obtenerPeso() {
+  LoadCell.update();
     return LoadCell.getData();
 }
 
-void actualizarLoadCell() {
-  LoadCell.update();
-}
 
 void calibrate() {
   Serial.println("***");

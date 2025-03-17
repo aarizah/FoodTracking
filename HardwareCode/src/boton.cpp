@@ -1,48 +1,28 @@
 #include "boton.h"
+#include "tasks.h"  // Para acceder a la cola de captura
 
-const int botonPin = 14;           // Pin del botón
-int estadoBoton = HIGH;            // Estado estable actual (HIGH: no presionado)
-int ultimoEstadoBoton = HIGH;      // Última lectura
-unsigned long ultimoTiempoDebounce = 0;  // Tiempo del último cambio detectado
-const unsigned long retardoDebounce = 50; // Tiempo de debounce (50 ms)
-bool accionRealizada = false;      // Flag para evitar múltiples envíos en una sola pulsación
+#define BOTON_PIN 14                  // Define el pin del botón
+#define DEBOUNCE_TIME pdMS_TO_TICKS(300) // 300 ms en ticks de FreeRTOS
 
+volatile TickType_t lastButtonPressTime = 0;  // Guarda el tiempo de la última pulsación
 
 void boton_setup() {
-  Serial.begin(115200);
-  pinMode(botonPin, INPUT_PULLUP); // Configura el pin con resistencia interna pull-up
+    pinMode(BOTON_PIN, INPUT_PULLUP);
+    attachInterrupt(BOTON_PIN, botonISR, FALLING);  // Configurar interrupción para flanco de bajada
 }
 
+void IRAM_ATTR botonISR() {
+    TickType_t currentTime = xTaskGetTickCount();
 
-// Función para detectar una única pulsación del botón
-bool presionar_boton() {
-  int lectura = digitalRead(botonPin); // Lectura actual del botón
-
-  // Si se detecta un cambio, se reinicia el contador de debounce
-  if (lectura != ultimoEstadoBoton) {
-    ultimoTiempoDebounce = millis();
-  }
-
-  // Si el cambio se mantiene estable por más de 'retardoDebounce' milisegundos
-  if ((millis() - ultimoTiempoDebounce) > retardoDebounce) {
-    // Si la lectura estable difiere del estado previamente guardado
-    if (lectura != estadoBoton) {
-      estadoBoton = lectura;
-
-      // Cuando se detecta que el botón se presiona (LOW)
-      if (estadoBoton == LOW) {
-        if (!accionRealizada) {  // Solo se ejecuta una vez por pulsación
-          accionRealizada = true;
-          ultimoEstadoBoton = lectura;  // Actualizar el estado anterior
-          return true;  // Devuelve 'true' solo una vez por pulsación
-        }
-      } else {
-        // Al liberar el botón, se reinicia el flag para permitir un nuevo envío
-        accionRealizada = false;
-      }
+    // Si han pasado menos de 50ms desde la última pulsación, ignorar (debounce)
+    if ((currentTime - lastButtonPressTime) < DEBOUNCE_TIME) {
+        return;
     }
-  }
+    
+    lastButtonPressTime = currentTime;  // Actualizar el tiempo de la última pulsación
 
-  ultimoEstadoBoton = lectura;
-  return false; // Solo devuelve 'true' una vez por pulsación
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+    vTaskNotifyGiveFromISR(task_sensors_button, &xHigherPriorityTaskWoken);
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }

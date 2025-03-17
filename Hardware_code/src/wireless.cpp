@@ -63,18 +63,30 @@ void send_image(size_t size, uint8_t *data, String imageID, String ID_prior) {
       Serial.println("WiFi desconectado. No se pudo enviar la imagen.");
       return; // Salir de la función si no hay conexión
   }
-
+  Serial.printf("Empieza el envio de la imagen");
   HTTPClient http;
   http.begin(serverName);
   http.addHeader("Content-Type", "application/octet-stream");
   http.addHeader("X-Image-ID", imageID);  // Se envía el ID en la cabecera HTTP
   http.addHeader("X-ID-Prior", ID_prior); // Se envía el ID_prior en la cabecera HTTP
-  // Enviar la imagen en binario sin esperar respuesta
-  http.POST(data, size);
+
+  unsigned long startTime = millis(); // ⏳ Registrar tiempo de inicio
+
+  // Enviar la imagen en binario
+  int httpResponseCode = http.POST(data, size);
+
+  unsigned long elapsedTime = millis() - startTime; // ⏳ Calcular tiempo transcurrido
+
+  if (httpResponseCode > 0) {
+      Serial.printf("✅ Imagen enviada en %lu ms. Código de respuesta: %d\n", elapsedTime, httpResponseCode);
+  } else {
+      Serial.printf("❌ Error al enviar la imagen: %s\n", http.errorToString(httpResponseCode).c_str());
+  }
 
   http.end(); // Cerrar conexión para liberar memoria
   delay(10);  // Pequeño delay para evitar problemas de conexión
 }
+
 
 
 void send_string(String str) {

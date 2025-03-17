@@ -1,5 +1,8 @@
 #include <Arduino.h>
 #include "esp_camera.h"
+#include "freertos/FreeRTOS.h"  // 🔥 Necesario para vTaskDelay
+#include "freertos/task.h"      // 🔥 Necesario para vTaskDelay
+#include "camera.h"
 
 #define PWDN_GPIO_NUM    -1
 #define RESET_GPIO_NUM   -1
@@ -45,10 +48,12 @@ void camera_setup() {
   config.pixel_format   = PIXFORMAT_JPEG;  // Mantiene JPEG para almacenamiento eficiente
   config.frame_size     = FRAMESIZE_XGA;   // Resolución XGA (1024x768) para buen detalle
   config.jpeg_quality   = 10;               // Menos compresión para mejor color y detalles
-  config.fb_count       = 1;
-  config.fb_location    = CAMERA_FB_IN_DRAM;
+  config.fb_count = 1;  // 🔥 Permite almacenar hasta 5 imágenes antes de sobrescribir
+  config.fb_location = CAMERA_FB_IN_PSRAM;  // 🔥 Guarda las imágenes en PSRAM en lugar de DRAM
+
 
   esp_err_t err = esp_camera_init(&config);
+  
   if (err != ESP_OK) {
     Serial.printf("Error al iniciar la cámara: 0x%x\n", err);
     return;
@@ -80,113 +85,94 @@ void camera_setup() {
     s->set_vflip(s, 0);          // 0 = disable , 1 = enable
     s->set_dcw(s, 1);            // 0 = disable , 1 = enable
     s->set_colorbar(s, 0);       // 0 = disable , 1 = enable
-    /*
-    //Cantidad de Luz que entra al sensor -----------------------------------------
-    s->set_exposure_ctrl(s, 0); 
-    // 0: Desactiva el control automático de exposición.
-    // 1: Activa el control automático de exposición.
-    s->set_aec_value(s, 300);   
-    // Solo funciona si el control automático de exposición está desactivado.El de arriba
-    //Ajusta la cantidad de luz que entra en la imagen.
-    //Valores recomendados:
-    //100 - 200: Imagen más oscura.
-    //250 - 350: Balance estándar.
-    //400 - 500: Imagen más iluminada.
-
-    //BALANCE DE BLANCOS -----------------------------
-    s->set_whitebal(s, 1);      // **0 desactiva balance de blancos auto**
-    
-     Solo funciona si el balance de blancos esta activado
-    s->set_wb_mode(s, valor);
-    0: Automático.
-    1: Luz solar (buen balance natural).
-    2: Luz nublada (levemente cálido).
-    3: Luz fluorescente (reduce azulados).
-    4: Luz incandescente (hace la imagen más cálida, menos azulada).
-    
-
-    //SATURACIÓN -------------------------------------
-    s->set_saturation(s, 0);  // **Mayor saturación** para que el rojo sea más fuerte
-    Puedes usar 3,4, valores intermedios
-    -2: Imagen más apagada (menos color).
-    0: Balance neutro.
-    2: Más colores.
-    4: Máxima saturación.
-    
-
-    //CONTRASTE --------------------------------------
-    s->set_contrast(s, 0);    // **Mejora el contraste** para recuperar detalles
-    
-    -2: Imagen más suave, menos contraste.
-    0: Normal.
-    2: Más contraste.
-    4: Máximo contraste.
-    
-
-    //BRILLO -----------------------------------------
-    s->set_brightness(s, 0); // **Reduce brillo** para evitar sobreexposición
-    
-    -2: Imagen más oscura.
-    0: Balance neutro.
-    2: Más brillo.
-    4: Muy brillante.
-    
-
-  
-    // GANANCIA --------------------------------------
-    s->set_gain_ctrl(s, 0);     // Desactiva auto ganancia
-    s->set_agc_gain(s, 5);      // Ajusta ganancia manualmente //De 0 a 15. Mucho puede generar ruido
-
-
-
-    // COLORES RGB -----------------------------------
-    s->set_awb_gain(s, 1);      // **Desactiva ajuste automático de AWB** 1 para activarlo
-
-
-    
-
-    // Correcciones de calidad
-    s->set_lenc(s, 1); // Corrección de lente 0 la desactiva
-    /* Si la imagen se ve curvada o distorsionada en los bordes, actívalo (1).
-     Si la imagen se ve bien sin curvaturas, puedes desactivarlo (0)
-
-    s->set_bpc(s, 1);  // Corrección de píxeles defectuosos
-    /*
-     Si ves puntos negros en la imagen, actívalo (1).
-     Si no tienes píxeles defectuosos visibles, puedes probar desactivarlo (0).
-    
-
-    s->set_wpc(s, 1);  // Corrección de píxeles blancos
-    /*
-     Si ves puntos blancos que no deberían estar ahí, actívalo (1).
-     Si la imagen no tiene este problema, puedes desactivarlo (0).
-    */
-
-    // Evita espejar o voltear la imagen
-    /*
-    0: Imagen normal.
-    1: Voltea la imagen.
-    
-    s->set_hmirror(s, 0);
-    s->set_vflip(s, 0);
-
-    */
     
   }
+
+
 }
 
 
-camera_fb_t *capture_image(){
-  // Captura dummy para limpiar el buffer
+
+#define N 20  // Tamaño del buffer circular de imágenes
+#include "esp_heap_caps.h"  // 🔥 Necesario para usar PSRAM
+
+// Buffer circular y variables de control
+image_buffer_t image_buffer[N];
+int current_index = 0; // Índice actual en el buffer
+
+
+/**
+ * @brief Guarda el frame capturado en el buffer circular.
+ * @param fb Frame capturado desde la cámara.
+ * @return Puntero a la copia de la imagen almacenada en el buffer.
+ */
+image_buffer_t *store_frame_in_buffer(camera_fb_t *fb) {
+    if (!fb) return NULL; // Si la captura falló, no hacemos nada.
+
+    // Liberar la memoria anterior si hay una imagen en este índice
+    if (image_buffer[current_index].buf) {
+      heap_caps_free(image_buffer[current_index].buf);  // 🔥 Liberar PSRAM
+    }
+  
+
+    // Asignar memoria y copiar los datos del frame
+    image_buffer[current_index].buf = (uint8_t *)heap_caps_malloc(fb->len, MALLOC_CAP_SPIRAM);
+
+    if (!image_buffer[current_index].buf) {
+        Serial.println("⚠️ Error: No se pudo asignar memoria para el buffer.");
+        return NULL;
+    }
+
+    memcpy(image_buffer[current_index].buf, fb->buf, fb->len);
+    image_buffer[current_index].len = fb->len;
+    image_buffer[current_index].width = fb->width;
+    image_buffer[current_index].height = fb->height;
+    image_buffer[current_index].format = fb->format;
+
+    // Guardar índice actual y actualizarlo con aritmética modular
+    int stored_index = current_index;
+    current_index = (current_index + 1) % N; // Mueve el índice circularmente
+
+    return &image_buffer[stored_index]; // Retornar la imagen almacenada
+}
+
+/**
+ * @brief Captura una imagen desde la cámara y la almacena en el buffer circular.
+ * @return Puntero a la copia de la imagen en el buffer.
+ */
+ 
+
+
+
+ image_buffer_t *capture_image() {
+  // Captura dummy para limpiar el buffer y obtener la imagen más reciente
   camera_fb_t *dummy = esp_camera_fb_get();
   if (dummy) {
-    esp_camera_fb_return(dummy);
+      esp_camera_fb_return(dummy);
   }
-  delay(50);  // Un pequeño retardo para que se capture una nueva imagen
+  vTaskDelay(50 / portTICK_PERIOD_MS); // Pequeño delay para capturar un nuevo frame
+
+  
 
   // Captura la imagen actual
   camera_fb_t *fb = esp_camera_fb_get();
-  return fb;
+  if (!fb) {
+      Serial.println("⚠️ Error: No se pudo capturar la imagen.");
+      return NULL;
+  }
+
+  // Guardar en el buffer circular
+  image_buffer_t *stored_frame = store_frame_in_buffer(fb);
+  esp_camera_fb_return(fb); // Liberar el buffer de la cámara
+
+   // Obtener y mostrar información de la PSRAM
+ size_t psram_free = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+ size_t psram_largest_block = heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM);
+ 
+ printf("  🧠 Memoria PSRAM disponible: %d bytes\n", psram_free);
+ printf("  🔳 Bloque libre más grande en PSRAM: %d bytes\n", psram_largest_block);
+
+  return stored_frame; // Retornar la copia de la imagen almacenada en el buffer
 }
 
 

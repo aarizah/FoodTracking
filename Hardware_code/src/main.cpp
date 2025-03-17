@@ -52,6 +52,7 @@ void loop() {
     // ✅ Solo imprimimos si el peso se mantiene estable por `STABLE_TIME_REQUIRED` milisegundos
     if ((millis() - stableStartTime) >= STABLE_TIME_REQUIRED && !weightPrinted) {
       id_number++;
+      
       camera_fb_t *fb= capture_image();
       send_image(fb->len, fb->buf, id,"0");
       esp_camera_fb_return(fb);

@@ -45,7 +45,7 @@ void camera_setup() {
   config.pixel_format   = PIXFORMAT_JPEG;  // Mantiene JPEG para almacenamiento eficiente
   config.frame_size     = FRAMESIZE_XGA;   // Resolución XGA (1024x768) para buen detalle
   config.jpeg_quality   = 10;               // Menos compresión para mejor color y detalles
-  config.fb_count       = 1;
+  config.fb_count       = 2;
   config.fb_location    = CAMERA_FB_IN_DRAM;
 
   esp_err_t err = esp_camera_init(&config);
@@ -177,15 +177,21 @@ void camera_setup() {
 
 
 camera_fb_t *capture_image(){
-  // Captura dummy para limpiar el buffer
+  /*
+    // Captura dummy para limpiar el buffer
   camera_fb_t *dummy = esp_camera_fb_get();
   if (dummy) {
     esp_camera_fb_return(dummy);
   }
   delay(50);  // Un pequeño retardo para que se capture una nueva imagen
+  */
+
 
   // Captura la imagen actual
   camera_fb_t *fb = esp_camera_fb_get();
+  // 🔥 Aquí imprimimos la dirección de memoria de la imagen
+  printf("  📷 Dirección del puntero imagen: %p\n", (void*)fb);
+  printf("  📂 Dirección del buffer de imagen: %p\n", (void*)fb->buf);
   return fb;
 }
 
