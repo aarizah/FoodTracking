@@ -1,25 +1,61 @@
 #include "wireless.h"
 
 // Credenciales WiFi
-const char* ssid = "Starlink 2.4";
-const char* password = "alex1000";
+//const char* ssid = "Starlink 2.4";
+//const char* password = "alex1000";
+const char* ssid = "Tenda_CD0458";
+const char* password = "9LDHWNTW";
+//const char* ssid = "CASA 39B";
+//const char* password = "SABANETA39B";
 
 // URL del servidor (ajusta IP, puerto y ruta)
+/*
 const char* serverName = "http://192.168.1.88:3000/upload";
 const char* serverName2 = "http://192.168.1.88:3000/json";
 const char* serverString = "http://192.168.1.88:3000/string";
+*/
+//SABANETA
+/*
+const char* serverName = "http://192.168.1.105:3000/upload";
+const char* serverName2 = "http://192.168.1.105:3000/json";
+const char* serverString = "http://192.168.1.105:3000/string";
+*/
 
-void wifi_setup(){
-      // Conexión WiFi
+//TENDA
+///*
+const char* serverName = "http://192.168.0.101:3000/upload";
+const char* serverName2 = "http://192.168.0.101:3000/json";
+const char* serverString = "http://192.168.0.101:3000/string";
+//*/
+
+
+
+
+
+void wifi_setup() {
+  // Conexión WiFi
   Serial.println("Conectando a WiFi...");
   WiFi.begin(ssid, password);
-  while(WiFi.status() != WL_CONNECTED){
+  while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
   }
   Serial.println("\nWiFi conectado.");
   
+  // Mostrar la calidad de la señal (RSSI)
+  int signalQuality = WiFi.RSSI(); // Valor en dBm
+  Serial.print("Calidad de la señal (RSSI): ");
+  Serial.print(signalQuality);
+  Serial.println(" dBm");
 }
+
+/*-30-50 Excelente
+-50-60 Buena
+-60-70 Aceptable
+-70-80 Pobre
+-80-90 Muy pobre
+Menos -90 Inutilizable
+*/
 
 
 // ✅ Configuración OTA
@@ -70,6 +106,8 @@ void send_image(size_t size, uint8_t *data, String imageID, String ID_prior) {
   http.addHeader("X-Image-ID", imageID);  // Se envía el ID en la cabecera HTTP
   http.addHeader("X-ID-Prior", ID_prior); // Se envía el ID_prior en la cabecera HTTP
 
+  http.setTimeout(10000); 
+
   unsigned long startTime = millis(); // ⏳ Registrar tiempo de inicio
 
   // Enviar la imagen en binario
@@ -97,7 +135,7 @@ void send_string(String str) {
       http.addHeader("Content-Type", "text/plain");
 
       // Enviar solo el string sin formato JSON
-      http.setTimeout(2000);  // ⏳ Máximo 2 segundos esperando respuesta
+      http.setTimeout(10000);  // ⏳ Máximo 2 segundos esperando respuesta
       int httpResponseCode = http.POST(str);
 
       if (httpResponseCode > 0) {

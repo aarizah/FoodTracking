@@ -94,26 +94,28 @@ app.listen(port, () => {
 
 
 
-function procesar_datos(json){    
+function procesar_datos(json){  
     let peso = json.weight;
     let id = json.id;
     let id_prior = json.ID_prior;
     const now = new Date();
     const formattedDate = `${now.getFullYear()}_${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}_${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}${now.getSeconds().toString().padStart(2, '0')}`;
-    //  Imagenes/sin_procesar -> Imagenes/descarte
-    if (peso<5){
-        const origen = path.join(__dirname, "Images", "sin_procesar");
-        const destino = path.join(__dirname, "Images", "descarte");
-        moverImagenes(origen, destino, `image_${id_prior}_${id}`,formattedDate);
-    }
-
-    else{
+    //  Imagenes/sin_procesar -> Imagenes/descart
+    const carpeta = path.join(__dirname, "Images", "sin_procesar");
+    if(existeImagen(carpeta,`image_${id_prior}_${id}`)){
 
         // Imagenes/sin_procesar -> imagenes/procesadas 
       if (id_prior==0){
+        if (peso<5){
+          const origen = path.join(__dirname, "Images", "sin_procesar");
+          const destino = path.join(__dirname, "Images", "descarte");
+          moverImagenes(origen, destino, `image_${id_prior}_${id}`,formattedDate);
+      }
+      else{
         const origen = path.join(__dirname, "Images", "sin_procesar");
         const destino = path.join(__dirname, "Images", "procesadas");
         moverImagenes(origen, destino, `image_${id_prior}_${id}`,formattedDate);
+        }
       }
 
       //Imagenes/sin_procesar -> Imagenes/openAI -> Imagenes/procesadas
@@ -121,11 +123,19 @@ function procesar_datos(json){
       // API -> Procesar_Datos_Finales -> Guardar_Datos
 
       else {    
+        if (peso<5){
+          const origen = path.join(__dirname, "Images", "openAI");
+          const destino = path.join(__dirname, "Images", "procesadas");
+          moverImagenes(path.join(__dirname, "Images", "sin_procesar"), path.join(__dirname, "Images", "descarte"), `image_${id_prior}_${id}`,formattedDate);
+          moverImagenMasAntigua(origen,destino);
+          hardware_data_openai=[];
+      }
+      else{
         const origen = path.join(__dirname, "Images", "sin_procesar");
         const destino = path.join(__dirname, "Images", "openAI");
         fs.readdir(destino, (_, archivos) => {
             const cantidad = archivos.length;
-            console.log(`Cantidad de imágenes encontradas: ${cantidad}`);
+            //console.log(`Cantidad de imágenes encontradas: ${cantidad}`);
 
             //Imagen a carpeta openAI y guarda en hardware_data_openai peso,id
             if (cantidad === 0) { 
@@ -141,9 +151,9 @@ function procesar_datos(json){
                 
                 
                 hardware_data_openai.push({"peso":peso,"id":formattedDate});
-                console.log(hardware_data_openai);
+                console.log("array variables locales:"+hardware_data_openai);
                 const dif_peso= hardware_data_openai[1].peso-hardware_data_openai[0].peso;
-                console.log("Peso:"+dif_peso);
+                console.log("Dif Peso:"+dif_peso);
                 // CALL OPEN AI API 
                 // 🔹 EJEMPLO DE USO
                 moverImagenes(origen, destino, `image_${id_prior}_${id}`, formattedDate)
@@ -151,6 +161,7 @@ function procesar_datos(json){
                     return openAI_API(); // Llamar a la API solo después de que las imágenes se hayan movido
                 })
                 .then((resultado) => {
+                    console.log("🍽️ Respuesta OPEN_AI:", resultado);
                     procesamiento_final(ajson(resultado),dif_peso,formattedDate);
                 })
                 .catch((error) => {
@@ -169,14 +180,14 @@ function procesar_datos(json){
                 hardware_data_openai.shift();
                 hardware_data_openai.push({"peso":peso,"id":formattedDate});
                 const dif_peso= hardware_data_openai[1].peso-hardware_data_openai[0].peso;
-                console.log("Peso:"+dif_peso);
+                console.log("Dif Peso:"+dif_peso);
                 // CALL OPEN AI API
                 moverImagenes(origen, destino, `image_${id_prior}_${id}`, formattedDate)
                 .then(() => {
                     return openAI_API(); // Llamar a la API solo después de que las imágenes se hayan movido
                 })
                 .then((resultado) => {
-                    console.log("🍽️ Resultado:", resultado);
+                    console.log("🍽️ Respuesta OPEN_AI:", resultado);
                     procesamiento_final(ajson(resultado),dif_peso,formattedDate);
                 })
                 .catch((error) => {
@@ -185,10 +196,13 @@ function procesar_datos(json){
                 moverImagenMasAntigua(destino, carpetaProcesados);
             }
         });
-
+      }
       } 
-    
     }
+    else{
+      console.log("Imagen NO LLEGÓ")
+    }
+    
   //  const json_procesado = {"id":formattedDate,"peso":peso,"id_prior":id_prior};
   // guardarHistorico(json_procesado);
 }
@@ -403,50 +417,79 @@ function moverImagenes(carpetaOrigen, carpetaDestino, criterio, nuevoNombre) {
     });
 }
 
+function existeImagen(carpetaOrigen, criterio) {
+  try {
+      // Verificar si la carpeta existe
+      if (!fs.existsSync(carpetaOrigen)) {
+          console.error(`La carpeta ${carpetaOrigen} no existe.`);
+          return false;
+      }
+
+      // Leer archivos de la carpeta
+      const archivos = fs.readdirSync(carpetaOrigen);
+
+      // Verificar si hay archivos que cumplan con el criterio
+      const archivosFiltrados = archivos.filter(archivo => archivo.includes(criterio));
+
+      return archivosFiltrados.length > 0;
+  } catch (error) {
+      console.error(`Error al verificar archivos: ${error}`);
+      return false;
+  }
+}
+
 // Mueve la imagen más antigua de una carpeta a otra
 function moverImagenMasAntigua(origen, destino) {
-    // Leer la carpeta de origen
-    fs.readdir(origen, (err, archivos) => {
-        if (err) {
-            console.error('Error al leer la carpeta:', err);
-            return;
-        }
+  // Leer la carpeta de origen
+  fs.readdir(origen, (err, archivos) => {
+      if (err) {
+          console.error('Error al leer la carpeta:', err);
+          return;
+      }
 
-        if (archivos.length === 0) {
-            console.log('No hay imágenes en la carpeta origen.');
-            return;
-        }
+      // Filtrar solo archivos de imagen (opcional)
+      const imagenes = archivos.filter(archivo => {
+          return /\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(archivo);
+      });
 
-        // 📌 Obtener la imagen más antigua
-        let imagenMasAntigua = archivos
-            .map(archivo => ({
-                nombre: archivo,
-                tiempo: fs.statSync(path.join(origen, archivo)).mtime.getTime() // Obtener fecha de modificación
-            }))
-            .sort((a, b) => a.tiempo - b.tiempo)[0]; // Ordenar por fecha y tomar la más antigua
+      if (imagenes.length === 0) {
+          console.log('No hay imágenes en la carpeta origen.');
+          return; // 🚨 Salir de la función si no hay imágenes
+      }
 
-        if (!imagenMasAntigua) {
-            console.log('No se encontró ninguna imagen.');
-            return;
-        }
+      // 📌 Obtener la imagen más antigua
+      let imagenMasAntigua = imagenes
+          .map(archivo => ({
+              nombre: archivo,
+              tiempo: fs.statSync(path.join(origen, archivo)).mtime.getTime() // Obtener fecha de modificación
+          }))
+          .sort((a, b) => a.tiempo - b.tiempo)[0]; // Ordenar por fecha y tomar la más antigua
 
-        const rutaOrigen = path.join(origen, imagenMasAntigua.nombre);
-        const rutaDestino = path.join(destino, imagenMasAntigua.nombre);
+      if (!imagenMasAntigua) {
+          console.log('No se encontró ninguna imagen válida.');
+          return;
+      }
 
-        // 📌 Asegurar que la carpeta de destino exista
-        if (!fs.existsSync(destino)) {
-            fs.mkdirSync(destino, { recursive: true });
-        }
+      const rutaOrigen = path.join(origen, imagenMasAntigua.nombre);
+      const rutaDestino = path.join(destino, imagenMasAntigua.nombre);
 
-        // 📌 Mover la imagen sin cambiar el nombre
-        fs.rename(rutaOrigen, rutaDestino, (err) => {
-            if (err) {
-                console.error(`Error al mover la imagen más antigua:`, err);
-            } else {
-                console.log(`Imagen movida: ${imagenMasAntigua.nombre}`);
-            }
-        });
-    });
+      // 📌 Asegurar que la carpeta de destino exista
+      fs.mkdir(destino, { recursive: true }, (err) => {
+          if (err) {
+              console.error(`Error al crear la carpeta destino:`, err);
+              return;
+          }
+
+          // 📌 Mover la imagen sin cambiar el nombre
+          fs.rename(rutaOrigen, rutaDestino, (err) => {
+              if (err) {
+                  console.error(`Error al mover la imagen más antigua:`, err);
+              } else {
+                  console.log(`Imagen movida: ${imagenMasAntigua.nombre}`);
+              }
+          });
+      });
+  });
 }
 
 // Función para extraer el JSON de un string
@@ -553,7 +596,7 @@ async function openAI_API() {
                     📝 **Generación del Array de Objetos**:
                     - Por cada alimento nuevo detectado, crea un objeto con la siguiente estructura:
                         - **nombre**: Nombre del alimento.
-                        - **porcentaje**: Porcentaje del peso total que aporta ese alimento (la suma de todos los porcentajes debe ser 100%).
+                        - **porcentaje**: No tengas en cuenta lo que habia en la antigua foto, el total de nuevos alimentos=100% **en base al peso que aporta**sin contar antiguos alimentos.
                         - **calorias**: Calorías del ingrediente por cada 100 gramos.
                         - **grasas**: Gramos de grasa por cada 100 gramos.
                         - **proteinas**: Gramos de proteína por cada 100 gramos.
