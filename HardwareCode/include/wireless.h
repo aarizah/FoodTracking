@@ -9,6 +9,7 @@
 #include <ArduinoOTA.h>  // ✅ Incluir librería OTA
 
 
+
 void send_weight(float weight, String id, String ID_prior);
 void send_string(String str);
 void wifi_setup(); // Inicializa la cámara

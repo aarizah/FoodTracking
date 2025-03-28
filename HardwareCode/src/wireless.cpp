@@ -32,6 +32,7 @@ const char* serverString = "http://192.168.0.101:3000/string";
 
 
 
+
 void wifi_setup() {
   // Conexión WiFi
   Serial.println("Conectando a WiFi...");
