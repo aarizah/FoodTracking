@@ -1,8 +1,25 @@
+Makefile linguist-detectable=false
+*/Makefile linguist-detectable=false
+*.mk linguist-detectable=false
 
-**/Makefile        linguist-vendored
-**/makefile        linguist-vendored
-**/GNUmakefile     linguist-vendored
-**/*.mk            linguist-vendored
+**/build/** linguist-vendored
+**/dist/** linguist-vendored
+**/node_modules/** linguist-vendored
+**/.pio/** linguist-vendored    # (si usas PlatformIO)
+HardwareCode/lib/** linguist-vendored  # (si copias librerías de terceros)
 
+
+# Firmware / Arduino como C++
+*.ino linguist-language=C++
+*.hpp linguist-language=C++
+*.h   linguist-language=C++
+*.c   linguist-language=C
+*.cpp linguist-language=C++
+
+# Backend como JavaScript
+BackEnd/** linguist-detectable=true
+*.js  linguist-language=JavaScript
+*.mjs linguist-language=JavaScript
+*.ts  linguist-language=TypeScript
 
 
